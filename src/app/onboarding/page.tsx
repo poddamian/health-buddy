@@ -23,6 +23,7 @@ export default function OnboardingPage() {
     const [step, setStep] = useState(1);
     const [name, setName] = useState("");
     const [age, setAge] = useState("");
+    const [gender, setGender] = useState<"m" | "k" | "">("");
     const [selectedHabits, setSelectedHabits] = useState<string[]>([]);
     const [selectedTime, setSelectedTime] = useState("");
     const [saving, setSaving] = useState(false);
@@ -66,7 +67,7 @@ export default function OnboardingPage() {
         });
     };
 
-    const canProceedStep1 = name.trim().length >= 2 && age.length > 0;
+    const canProceedStep1 = name.trim().length >= 2 && age.length > 0 && gender !== "";
     const canProceedStep2 = selectedHabits.length >= 1;
     const canProceedStep3 = selectedTime !== "";
 
@@ -83,6 +84,7 @@ export default function OnboardingPage() {
             body: JSON.stringify({
                 name: name.trim(),
                 age: parseInt(age, 10),
+                gender,
                 habits: selectedHabits,
                 goals: selectedHabits,
                 checkin_time: selectedTime,
@@ -144,6 +146,18 @@ export default function OnboardingPage() {
                                     <label className="block text-sm font-semibold text-gray-700 mb-2">Twój wiek</label>
                                     <input type="number" value={age} onChange={(e) => setAge(e.target.value)} placeholder="np. 28" min="13" max="100"
                                         className="w-full border-2 border-gray-200 focus:border-green-500 rounded-2xl px-4 py-3.5 text-gray-900 font-medium outline-none transition-colors text-base" />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-semibold text-gray-700 mb-2">Płeć</label>
+                                    <p className="text-xs text-gray-400 mb-2">Używamy tego wyłącznie do poprawnej polskiej odmiany (np. &bdquo;zrobiłaś&rdquo; / &bdquo;zrobiłeś&rdquo;).</p>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        {[{ id: "k", label: "Kobieta" }, { id: "m", label: "Mężczyzna" }].map((g) => (
+                                            <button key={g.id} type="button" onClick={() => setGender(g.id as "m" | "k")}
+                                                className={`rounded-2xl px-4 py-3.5 font-semibold border-2 transition-colors ${gender === g.id ? "bg-green-500 border-green-500 text-white" : "border-gray-200 text-gray-700 hover:border-green-300"}`}>
+                                                {g.label}
+                                            </button>
+                                        ))}
+                                    </div>
                                 </div>
                             </div>
                             <div className="mt-8 bg-green-50 border border-green-100 rounded-2xl p-4">

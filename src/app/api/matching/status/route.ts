@@ -41,7 +41,7 @@ export async function GET() {
 
             const { data: buddyProfile } = await supabase
                 .from('profiles')
-                .select('id, name, age, habits, checkin_time, streak, created_at')
+                .select('id, name, age, habits, checkin_time, streak, created_at, gender')
                 .eq('id', buddyId)
                 .single()
 
@@ -55,6 +55,7 @@ export async function GET() {
                     checkin_time: buddyProfile?.checkin_time,
                     streak: buddyProfile?.streak ?? 0,
                     member_since: buddyProfile?.created_at,
+                    gender: buddyProfile?.gender ?? null,
                 },
                 score: buddyRow.compatibility_score ?? 0,
                 matched_at: buddyRow.matched_at,

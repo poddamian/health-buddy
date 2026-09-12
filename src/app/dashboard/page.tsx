@@ -7,10 +7,11 @@ import { useUser, useClerk, UserButton } from "@clerk/nextjs";
 import UpgradePrompt from "@/components/UpgradePrompt";
 import type { SubscriptionTier } from "@/lib/stripe";
 import { getById } from "@/lib/habits";
+import { conj, toInstrumental, type Gender } from "@/lib/grammar";
 
 interface BuddyInfo {
     name: string; age: number | null; streak: number;
-    checkin_time: string | null; habits: string[];
+    checkin_time: string | null; habits: string[]; gender: Gender;
 }
 
 interface FeedEntry { date: string; note: string | null; completed: boolean; }
@@ -42,6 +43,7 @@ function DashboardContent() {
     const [activeTab, setActiveTab] = useState<Tab>("home");
     const [myStreak, setMyStreak] = useState(0);
     const [userName, setUserName] = useState("");
+    const [userGender, setUserGender] = useState<Gender>(null);
     const [userEmail, setUserEmail] = useState("");
     const [clerkUserId, setClerkUserId] = useState<string | null>(null);
     const [subscriptionTier, setSubscriptionTier] = useState<SubscriptionTier>("free");
@@ -94,6 +96,7 @@ function DashboardContent() {
                 if (profile) {
                     setMyStreak(profile.streak ?? 0);
                     setUserName(profile.name ?? "");
+                    setUserGender((profile.gender as Gender) ?? null);
                     setNameInput(profile.name ?? "");
                     setSubscriptionTier((profile.subscription_tier as SubscriptionTier) ?? "free");
                     setUserHabits((profile.habits as string[]) ?? []);
@@ -119,6 +122,7 @@ function DashboardContent() {
                         streak: statusData.buddy.streak ?? 0,
                         checkin_time: statusData.buddy.checkin_time ?? null,
                         habits: (statusData.buddy.habits as string[]) ?? [],
+                        gender: (statusData.buddy.gender as Gender) ?? null,
                     });
                 }
             }
@@ -170,6 +174,8 @@ function DashboardContent() {
         const params = new URLSearchParams();
         params.set('streak', String(data.streak ?? myStreak));
         if (buddy?.name) params.set('buddy', buddy.name);
+        if (buddy?.gender) params.set('buddyGender', buddy.gender);
+        if (userGender) params.set('meGender', userGender);
         router.push(`/checkin-success?${params.toString()}`);
     };
 
@@ -300,7 +306,7 @@ function DashboardContent() {
                             <UserButton />
                         </div>
                     </div>
-                    {activeTab === "home" && <h1 className="text-xl font-black text-gray-900 mt-1">Cześć{user?.firstName ? `, ${user.firstName}` : userName ? `, ${userName}` : ""}!{buddy ? ` Dzień z ${buddy.name} 🔥` : " 👋"}</h1>}
+                    {activeTab === "home" && <h1 className="text-xl font-black text-gray-900 mt-1">Cześć{user?.firstName ? `, ${user.firstName}` : userName ? `, ${userName}` : ""}!{buddy ? ` Dzień z ${toInstrumental(buddy.name)} 🔥` : " 👋"}</h1>}
                     {activeTab === "profile" && <h1 className="text-xl font-black text-gray-900 mt-1">Mój profil 👤</h1>}
                     {activeTab === "settings" && <h1 className="text-xl font-black text-gray-900 mt-1">Ustawienia ⚙️</h1>}
                     {showUpgradeToast && (
@@ -343,7 +349,7 @@ function DashboardContent() {
                                         <div>
                                             <p className="font-bold text-gray-900">{buddy.name}{buddy.age ? `, ${buddy.age}` : ""}</p>
                                             <p className="text-xs text-green-600 font-medium">
-                                                {buddy.checkin_time ? `${CHECKIN_LABELS[buddy.checkin_time] ?? buddy.checkin_time} meldunek` : "Aktywny/-a"}
+                                                {buddy.checkin_time ? `${CHECKIN_LABELS[buddy.checkin_time] ?? buddy.checkin_time} meldunek` : conj(buddy.gender, "Aktywny", "Aktywna", "Aktywny/-a")}
                                             </p>
                                         </div>
                                         <button onClick={handleNudge} disabled={nudgeState === "sending"}
@@ -404,7 +410,7 @@ function DashboardContent() {
                                     <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
                                     <p className="text-xs font-semibold text-green-600 uppercase tracking-wide">Dzisiejszy meldunek</p>
                                 </div>
-                                <h2 className="text-lg font-black text-gray-900 mb-4">Które nawyki zrealizowałeś/-aś dziś? 🎯</h2>
+                                <h2 className="text-lg font-black text-gray-900 mb-4">Które nawyki {conj(userGender, "zrealizowałeś", "zrealizowałaś", "zrealizowałeś/-aś")} dziś? 🎯</h2>
                                 {userHabits.length > 0 ? (
                                     <div className="space-y-2 mb-4">
                                         {userHabits.map((habitId) => {
@@ -452,7 +458,7 @@ function DashboardContent() {
                         ) : (
                             <div className="bg-green-50 border border-green-200 rounded-2xl p-5 animate-fade-in">
                                 <p className="font-bold text-green-800 mb-1">✅ Zameldowano!</p>
-                                <p className="text-sm text-green-700">Świetna robota! Twój Buddy widzi, że dziś dałeś/-aś z siebie wszystko. 💪</p>
+                                <p className="text-sm text-green-700">Świetna robota! Twój Buddy widzi, że dziś {conj(userGender, "dałeś", "dałaś", "dałeś/-aś")} z siebie wszystko. 💪</p>
                             </div>
                         )}
 
@@ -466,7 +472,7 @@ function DashboardContent() {
                                                 <div className={`mt-0.5 w-7 h-7 rounded-full flex-shrink-0 flex items-center justify-center text-sm font-bold ${entry.completed ? "bg-green-100 text-green-600" : "bg-red-100 text-red-600"}`}>{entry.completed ? "✓" : "✗"}</div>
                                                 <div className="flex-1 min-w-0">
                                                     <p className="text-xs text-gray-400 font-semibold mb-0.5">{entry.date}</p>
-                                                    <p className="text-sm text-gray-700 leading-relaxed">{entry.note || "Zameldował/-a się bez notatki"}</p>
+                                                    <p className="text-sm text-gray-700 leading-relaxed">{entry.note || `${conj(buddy?.gender, "Zameldował się", "Zameldowała się", "Zameldował/-a się")} bez notatki`}</p>
                                                 </div>
                                             </div>
                                         ))}

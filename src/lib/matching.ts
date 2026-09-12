@@ -9,6 +9,7 @@ export interface MatchProfile {
     timezone: string | null;
     streak: number;
     created_at: string | null;
+    gender?: "m" | "k" | null;
 }
 
 export interface MatchResult {

@@ -5,13 +5,14 @@ import { useRouter } from "next/navigation";
 import { useUser } from "@clerk/nextjs";
 import { getById } from "@/lib/habits";
 import type { SubscriptionTier } from "@/lib/stripe";
+import { conj, toInstrumental, type Gender } from "@/lib/grammar";
 
 type Phase = "checking" | "searching" | "matched" | "queued" | "rematch_limit" | "error";
 
 interface BuddyData {
     id: string; name: string; age: number | null;
     habits: string[]; shared_habits: string[];
-    checkin_time: string | null; streak: number; member_since: string | null;
+    checkin_time: string | null; streak: number; member_since: string | null; gender: Gender;
 }
 
 const CHECKIN_LABELS: Record<string, string> = {
@@ -31,6 +32,7 @@ export default function MatchingPage() {
     const [rematchDaysLeft, setRematchDaysLeft] = useState(0);
     const [errorMsg, setErrorMsg] = useState("");
     const [rematching, setRematching] = useState(false);
+    const [myGender, setMyGender] = useState<Gender>(null);
 
     useEffect(() => {
         if (phase !== "searching") return;
@@ -67,6 +69,7 @@ export default function MatchingPage() {
             if (meRes.ok) {
                 const { profile } = await meRes.json();
                 setSubscriptionTier((profile?.subscription_tier as SubscriptionTier) ?? "free");
+                setMyGender((profile?.gender as Gender) ?? null);
             }
 
             const statusRes = await fetch("/api/matching/status");
@@ -146,7 +149,7 @@ export default function MatchingPage() {
                         <div className="flex flex-col items-center text-center w-full">
                             <div className="text-5xl mb-3">🎉</div>
                             <h1 className="text-2xl font-black text-gray-900 mb-1">Znaleziono Buddiego!</h1>
-                            <p className="text-gray-500 mb-6">Jesteś {buddy ? `sparowany/-a z ${buddy.name}` : "już sparowany/-a"}! Zacznijcie razem już dziś.</p>
+                            <p className="text-gray-500 mb-6">Jesteś {conj(myGender, "sparowany", "sparowana", "sparowany/-a")}{buddy ? ` z ${toInstrumental(buddy.name)}` : ""}! Zacznijcie razem już dziś.</p>
                             <div className="w-full bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50 rounded-3xl p-6 border border-green-100 shadow-xl shadow-green-100 mb-5">
                                 <div className="mb-5">
                                     <div className="flex justify-center mb-3"><div className="bg-green-500 text-white font-black text-sm px-4 py-1.5 rounded-full shadow">✨ {score}% zgodności</div></div>
@@ -161,7 +164,7 @@ export default function MatchingPage() {
                                 <div className="flex items-center justify-center gap-3 mb-4">
                                     <div>
                                         <p className="font-black text-gray-900 text-xl">{buddy.name}{buddy.age ? `, ${buddy.age}` : ""}</p>
-                                        <p className="text-sm text-gray-500">{buddy.checkin_time ? CHECKIN_LABELS[buddy.checkin_time] ?? buddy.checkin_time : "Aktywny/-a użytkownik/-czka"}</p>
+                                        <p className="text-sm text-gray-500">{buddy.checkin_time ? CHECKIN_LABELS[buddy.checkin_time] ?? buddy.checkin_time : conj(buddy.gender, "Aktywny użytkownik", "Aktywna użytkowniczka", "Aktywny/-a użytkownik/-czka")}</p>
                                     </div>
                                     {buddy.streak > 0 && (
                                         <div className="flex items-center gap-1 bg-orange-100 rounded-full px-3 py-1.5"><span>🔥</span><span className="font-bold text-orange-600">{buddy.streak}</span></div>

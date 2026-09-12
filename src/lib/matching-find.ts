@@ -17,7 +17,7 @@ export async function runMatchingFind(userId: string) {
     // 1. Get current user's profile by Clerk user ID
     const { data: me, error: meErr } = await supabase
         .from('profiles')
-        .select('id, name, age, habits, checkin_time, timezone, streak, subscription_tier, created_at')
+        .select('id, name, age, habits, checkin_time, timezone, streak, subscription_tier, created_at, gender')
         .eq('clerk_user_id', userId)
         .single()
 
@@ -57,7 +57,7 @@ export async function runMatchingFind(userId: string) {
     // 4. Fetch candidates
     const { data: candidates, error: candErr } = await supabase
         .from('profiles')
-        .select('id, name, age, habits, checkin_time, timezone, streak, created_at')
+        .select('id, name, age, habits, checkin_time, timezone, streak, created_at, gender')
         .eq('is_available_for_matching', true)
         .not('id', 'in', `(${[...excludedIds].join(',')})`)
 
@@ -72,6 +72,7 @@ export async function runMatchingFind(userId: string) {
         timezone: me.timezone ?? null,
         streak: me.streak ?? 0,
         created_at: me.created_at ?? null,
+        gender: me.gender ?? null,
     }
 
     // 5. Score all candidates
@@ -86,6 +87,7 @@ export async function runMatchingFind(userId: string) {
                 timezone: c.timezone ?? null,
                 streak: c.streak ?? 0,
                 created_at: c.created_at ?? null,
+                gender: c.gender ?? null,
             })
         )
         .filter((r) => r.score >= MIN_MATCH_SCORE)
@@ -127,6 +129,7 @@ export async function runMatchingFind(userId: string) {
                 checkin_time: best.profile.checkin_time,
                 streak: best.profile.streak,
                 member_since: best.profile.created_at,
+                gender: best.profile.gender ?? null,
             },
             score: best.score,
             breakdown: best.breakdown,

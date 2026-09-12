@@ -2,6 +2,7 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { conj, type Gender } from "@/lib/grammar";
 
 export default function CheckinSuccessPage() {
     return (
@@ -21,6 +22,8 @@ function CheckinSuccessContent() {
     const [showConfetti, setShowConfetti] = useState(false);
     const streak = Number(searchParams.get("streak") ?? 1) || 1;
     const buddyName = searchParams.get("buddy");
+    const buddyGender = searchParams.get("buddyGender") as Gender;
+    const meGender = searchParams.get("meGender") as Gender;
 
     useEffect(() => {
         const t = setTimeout(() => setShowConfetti(true), 100);
@@ -78,7 +81,7 @@ function CheckinSuccessContent() {
                         className={`text-gray-500 text-lg mb-8 transition-all duration-700 delay-400 ${showConfetti ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
                             }`}
                     >
-                        {buddyName ? `${buddyName} został/-a powiadomiony/-a. Tak trzymać! 💪` : "Tak trzymać! 💪"}
+                        {buddyName ? `${buddyName} ${conj(buddyGender, "został powiadomiony", "została powiadomiona", "został/-a powiadomiony/-a")}. Tak trzymać! 💪` : "Tak trzymać! 💪"}
                     </p>
 
                     {/* Streak card */}
@@ -122,8 +125,8 @@ function CheckinSuccessContent() {
                                     {buddyName.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase()}
                                 </div>
                                 <div className="text-left">
-                                    <p className="font-bold text-gray-900 text-sm">{buddyName} dostał/-a powiadomienie! 🔔</p>
-                                    <p className="text-xs text-gray-500">Wie, że się zameldowałeś/-aś dziś</p>
+                                    <p className="font-bold text-gray-900 text-sm">{buddyName} {conj(buddyGender, "dostał", "dostała", "dostał/-a")} powiadomienie! 🔔</p>
+                                    <p className="text-xs text-gray-500">Wie, że się {conj(meGender, "zameldowałeś", "zameldowałaś", "zameldowałeś/-aś")} dziś</p>
                                 </div>
                                 <span className="ml-auto text-xl">👍</span>
                             </div>
