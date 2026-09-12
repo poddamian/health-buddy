@@ -4,7 +4,6 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useUser } from "@clerk/nextjs";
-import { supabase } from "@/lib/supabase";
 import type { SubscriptionTier } from "@/lib/stripe";
 
 const PLANS = [
@@ -82,12 +81,11 @@ export default function PricingPage() {
         const load = async () => {
             setUserId(user.id);
             setUserEmail(user.primaryEmailAddress?.emailAddress ?? "");
-            const { data } = await supabase
-                .from("profiles")
-                .select("subscription_tier")
-                .eq("clerk_user_id", user.id)
-                .single();
-            setCurrentTier((data?.subscription_tier as SubscriptionTier) ?? "free");
+            const res = await fetch("/api/profile/me");
+            if (res.ok) {
+                const { profile } = await res.json();
+                setCurrentTier((profile?.subscription_tier as SubscriptionTier) ?? "free");
+            }
         };
         load();
     }, [isLoaded, isSignedIn, user]);
@@ -114,11 +112,7 @@ export default function PricingPage() {
     const handleManagePortal = async () => {
         if (!userId) return;
         setLoading("portal");
-        const res = await fetch("/api/stripe/portal", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ userId }),
-        });
+        const res = await fetch("/api/stripe/portal", { method: "POST" });
         const { url } = await res.json();
         if (url) window.location.href = url;
     };

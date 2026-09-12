@@ -46,13 +46,25 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ alreadyDone: true })
         }
 
-        // Insert check-in
-        const { error: checkinError } = await supabase.from('checkins').insert({
+        // Insert check-in (including per-habit completion, if the column exists)
+        const checkedHabitsList = Array.isArray(checkedHabits) ? checkedHabits : []
+        let { error: checkinError } = await supabase.from('checkins').insert({
             user_id: supabaseUserId,
             date: today,
             completed: true,
             note: note?.trim() || null,
+            checked_habits: checkedHabitsList,
         })
+
+        // Fall back for databases that don't have a `checked_habits` column yet
+        if (checkinError?.code === '42703' || checkinError?.code === 'PGRST204') {
+            ;({ error: checkinError } = await supabase.from('checkins').insert({
+                user_id: supabaseUserId,
+                date: today,
+                completed: true,
+                note: note?.trim() || null,
+            }))
+        }
 
         if (checkinError) {
             console.error('Checkin insert error:', checkinError)
@@ -62,7 +74,13 @@ export async function POST(req: NextRequest) {
         // Increment streak
         await supabase.rpc('increment_streak', { user_id: supabaseUserId })
 
-        return NextResponse.json({ success: true })
+        const { data: updatedProfile } = await supabase
+            .from('profiles')
+            .select('streak')
+            .eq('id', supabaseUserId)
+            .single()
+
+        return NextResponse.json({ success: true, streak: updatedProfile?.streak ?? 0 })
     } catch (err) {
         console.error('Checkin API error:', err)
         return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
@@ -86,7 +104,7 @@ export async function GET() {
             .single()
 
         if (!profile) {
-            return NextResponse.json({ checkinDone: false })
+            return NextResponse.json({ checkinDone: false, totalCheckins: 0 })
         }
 
         const today = new Date().toISOString().split('T')[0]
@@ -98,7 +116,13 @@ export async function GET() {
             .eq('completed', true)
             .maybeSingle()
 
-        return NextResponse.json({ checkinDone: !!checkin })
+        const { count } = await supabase
+            .from('checkins')
+            .select('*', { count: 'exact', head: true })
+            .eq('user_id', profile.id)
+            .eq('completed', true)
+
+        return NextResponse.json({ checkinDone: !!checkin, totalCheckins: count ?? 0 })
     } catch (err) {
         console.error('Checkin GET error:', err)
         return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

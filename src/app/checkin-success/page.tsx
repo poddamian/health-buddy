@@ -1,12 +1,26 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 
 export default function CheckinSuccessPage() {
+    return (
+        <Suspense fallback={
+            <div className="min-h-screen bg-white flex items-center justify-center">
+                <div className="w-14 h-14 rounded-full border-4 border-green-200 border-t-green-500 animate-spin" />
+            </div>
+        }>
+            <CheckinSuccessContent />
+        </Suspense>
+    );
+}
+
+function CheckinSuccessContent() {
     const router = useRouter();
+    const searchParams = useSearchParams();
     const [showConfetti, setShowConfetti] = useState(false);
-    const [streak] = useState(1);
+    const streak = Number(searchParams.get("streak") ?? 1) || 1;
+    const buddyName = searchParams.get("buddy");
 
     useEffect(() => {
         const t = setTimeout(() => setShowConfetti(true), 100);
@@ -64,7 +78,7 @@ export default function CheckinSuccessPage() {
                         className={`text-gray-500 text-lg mb-8 transition-all duration-700 delay-400 ${showConfetti ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
                             }`}
                     >
-                        Anna została powiadomiona. Tak trzymać! 💪
+                        {buddyName ? `${buddyName} został/-a powiadomiony/-a. Tak trzymać! 💪` : "Tak trzymać! 💪"}
                     </p>
 
                     {/* Streak card */}
@@ -98,21 +112,23 @@ export default function CheckinSuccessPage() {
                     </div>
 
                     {/* Buddy notification */}
-                    <div
-                        className={`w-full bg-gray-50 rounded-2xl p-4 mb-6 transition-all duration-700 delay-500 ${showConfetti ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
-                            }`}
-                    >
-                        <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-green-400 to-emerald-600 flex items-center justify-center font-bold text-white text-sm">
-                                AN
+                    {buddyName && (
+                        <div
+                            className={`w-full bg-gray-50 rounded-2xl p-4 mb-6 transition-all duration-700 delay-500 ${showConfetti ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
+                                }`}
+                        >
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-green-400 to-emerald-600 flex items-center justify-center font-bold text-white text-sm">
+                                    {buddyName.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase()}
+                                </div>
+                                <div className="text-left">
+                                    <p className="font-bold text-gray-900 text-sm">{buddyName} dostał/-a powiadomienie! 🔔</p>
+                                    <p className="text-xs text-gray-500">Wie, że się zameldowałeś/-aś dziś</p>
+                                </div>
+                                <span className="ml-auto text-xl">👍</span>
                             </div>
-                            <div className="text-left">
-                                <p className="font-bold text-gray-900 text-sm">Anna dostała powiadomienie! 🔔</p>
-                                <p className="text-xs text-gray-500">Wie, że się zameldowałeś/-aś dziś</p>
-                            </div>
-                            <span className="ml-auto text-xl">👍</span>
                         </div>
-                    </div>
+                    )}
 
                     {/* Motivation quote */}
                     <div

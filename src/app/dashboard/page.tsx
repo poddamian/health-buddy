@@ -4,22 +4,20 @@ import { useState, useEffect, Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useUser, useClerk, UserButton } from "@clerk/nextjs";
-import { supabase } from "@/lib/supabase";
 import UpgradePrompt from "@/components/UpgradePrompt";
 import type { SubscriptionTier } from "@/lib/stripe";
 import { getById } from "@/lib/habits";
 
-const mockBuddy = {
-    name: "Anna", age: 32,
-    goals: ["💧 Pij więcej wody", "🏃 Ćwicz codziennie", "😴 Śpij 8 godzin"],
-    streak: 7, lastCheckin: "Dziś o 8:00", avatar: "AN",
-};
+interface BuddyInfo {
+    name: string; age: number | null; streak: number;
+    checkin_time: string | null; habits: string[];
+}
 
-const mockFeed = [
-    { day: "Wczoraj", note: "Wypiłam 2l wody i poszłam pobiegać! 🏃", completed: true },
-    { day: "2 dni temu", note: "Pominęłam bieg, ale dbałam o nawodnienie 💧", completed: true },
-    { day: "3 dni temu", note: "Idealny dzień! Wszystkie cele zrealizowane ✅", completed: true },
-];
+interface FeedEntry { date: string; note: string | null; completed: boolean; }
+
+const CHECKIN_LABELS: Record<string, string> = {
+    morning: "🌅 Rano", afternoon: "☀️ Południe", evening: "🌙 Wieczór",
+};
 
 type Tab = "home" | "profile" | "settings";
 
@@ -48,8 +46,11 @@ function DashboardContent() {
     const [clerkUserId, setClerkUserId] = useState<string | null>(null);
     const [subscriptionTier, setSubscriptionTier] = useState<SubscriptionTier>("free");
     const [checkinDone, setCheckinDone] = useState(false);
+    const [totalCheckins, setTotalCheckins] = useState(0);
     const [note, setNote] = useState("");
-    const [nudgeSent, setNudgeSent] = useState(false);
+    const [buddy, setBuddy] = useState<BuddyInfo | null>(null);
+    const [feed, setFeed] = useState<FeedEntry[]>([]);
+    const [nudgeState, setNudgeState] = useState<"idle" | "sending" | "sent" | "unavailable" | "error">("idle");
     const [saving, setSaving] = useState(false);
     const [saveError, setSaveError] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
@@ -71,6 +72,9 @@ function DashboardContent() {
         document.documentElement.classList.toggle('dark', saved);
     }, []);
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+    const [deleting, setDeleting] = useState(false);
+    const [deleteError, setDeleteError] = useState<string | null>(null);
+    const [exporting, setExporting] = useState(false);
     const [buddyChange, setBuddyChange] = useState<{ hasBuddy: boolean; canChange: boolean; daysLeft: number } | null>(null);
     const [changingBuddy, setChangingBuddy] = useState(false);
     const [changeError, setChangeError] = useState<string | null>(null);
@@ -84,26 +88,48 @@ function DashboardContent() {
             setClerkUserId(uid);
             setUserEmail(user.primaryEmailAddress?.emailAddress ?? "");
 
-            const { data: profile } = await supabase
-                .from("profiles")
-                .select("name, streak, subscription_tier, habits")
-                .eq("clerk_user_id", uid)
-                .single();
-
-            if (profile) {
-                setMyStreak(profile.streak ?? 0);
-                setUserName(profile.name ?? "");
-                setNameInput(profile.name ?? "");
-                setSubscriptionTier((profile.subscription_tier as SubscriptionTier) ?? "free");
-                setUserHabits((profile.habits as string[]) ?? []);
+            const profileRes = await fetch("/api/profile/me");
+            if (profileRes.ok) {
+                const { profile } = await profileRes.json();
+                if (profile) {
+                    setMyStreak(profile.streak ?? 0);
+                    setUserName(profile.name ?? "");
+                    setNameInput(profile.name ?? "");
+                    setSubscriptionTier((profile.subscription_tier as SubscriptionTier) ?? "free");
+                    setUserHabits((profile.habits as string[]) ?? []);
+                }
             }
 
             // Check today's checkin via API (uses UUID internally)
             const checkinRes = await fetch('/api/checkin');
             if (checkinRes.ok) {
-                const { checkinDone: done } = await checkinRes.json();
+                const { checkinDone: done, totalCheckins: total } = await checkinRes.json();
                 if (done) setCheckinDone(true);
+                setTotalCheckins(total ?? 0);
             }
+
+            // Real buddy (replaces the old mocked buddy)
+            const statusRes = await fetch('/api/matching/status');
+            if (statusRes.ok) {
+                const statusData = await statusRes.json();
+                if (statusData.status === 'matched' && statusData.buddy) {
+                    setBuddy({
+                        name: statusData.buddy.name ?? '',
+                        age: statusData.buddy.age ?? null,
+                        streak: statusData.buddy.streak ?? 0,
+                        checkin_time: statusData.buddy.checkin_time ?? null,
+                        habits: (statusData.buddy.habits as string[]) ?? [],
+                    });
+                }
+            }
+
+            // Real activity feed (buddy's recent check-ins)
+            const feedRes = await fetch('/api/buddy/feed');
+            if (feedRes.ok) {
+                const { feed: feedData } = await feedRes.json();
+                setFeed(feedData ?? []);
+            }
+
             setLoading(false);
         };
 
@@ -134,23 +160,87 @@ function DashboardContent() {
             }),
         });
 
+        const data = await res.json();
+
         if (!res.ok) {
-            const data = await res.json();
             setSaveError(`Błąd zapisu meldunku: ${data.error ?? 'Nieznany błąd'}`);
             setSaving(false); return;
         }
 
-        router.push('/checkin-success');
+        const params = new URLSearchParams();
+        params.set('streak', String(data.streak ?? myStreak));
+        if (buddy?.name) params.set('buddy', buddy.name);
+        router.push(`/checkin-success?${params.toString()}`);
     };
 
     const handleSaveName = async () => {
         if (!clerkUserId || !nameInput.trim()) return;
         setNameSaving(true);
-        await supabase.from("profiles").update({ name: nameInput.trim() }).eq("clerk_user_id", clerkUserId);
+        await fetch("/api/profile/update", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name: nameInput.trim() }),
+        });
         setUserName(nameInput.trim()); setEditingName(false); setNameSaving(false);
     };
 
     const handleLogout = async () => { await signOut(); router.push("/"); };
+
+    const handleNudge = async () => {
+        setNudgeState("sending");
+        try {
+            const res = await fetch('/api/buddy/nudge', { method: 'POST' });
+            if (res.ok) {
+                setNudgeState("sent");
+                setTimeout(() => setNudgeState("idle"), 3000);
+            } else if (res.status === 501) {
+                setNudgeState("unavailable");
+                setTimeout(() => setNudgeState("idle"), 3000);
+            } else {
+                setNudgeState("error");
+                setTimeout(() => setNudgeState("idle"), 3000);
+            }
+        } catch {
+            setNudgeState("error");
+            setTimeout(() => setNudgeState("idle"), 3000);
+        }
+    };
+
+    const handleExport = async () => {
+        setExporting(true);
+        try {
+            const res = await fetch('/api/profile/export');
+            const data = await res.json();
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'health-buddy-dane.json';
+            a.click();
+            URL.revokeObjectURL(url);
+        } finally {
+            setExporting(false);
+        }
+    };
+
+    const handleDeleteAccount = async () => {
+        setDeleting(true);
+        setDeleteError(null);
+        try {
+            const res = await fetch('/api/profile/delete', { method: 'DELETE' });
+            if (!res.ok) {
+                const data = await res.json();
+                setDeleteError(data.error ?? 'Nie udało się usunąć konta');
+                setDeleting(false);
+                return;
+            }
+            await signOut();
+            router.push("/");
+        } catch {
+            setDeleteError('Błąd sieci — spróbuj ponownie');
+            setDeleting(false);
+        }
+    };
 
     const tierLabel = subscriptionTier === "pro" ? "Pro 🚀" : subscriptionTier === "premium" ? "Premium ⭐" : "Free";
     const tierColor = subscriptionTier === "pro" ? "bg-purple-100 text-purple-700"
@@ -210,7 +300,7 @@ function DashboardContent() {
                             <UserButton />
                         </div>
                     </div>
-                    {activeTab === "home" && <h1 className="text-xl font-black text-gray-900 mt-1">Cześć{user?.firstName ? `, ${user.firstName}` : userName ? `, ${userName}` : ""}! Dzień z {mockBuddy.name} 🔥</h1>}
+                    {activeTab === "home" && <h1 className="text-xl font-black text-gray-900 mt-1">Cześć{user?.firstName ? `, ${user.firstName}` : userName ? `, ${userName}` : ""}!{buddy ? ` Dzień z ${buddy.name} 🔥` : " 👋"}</h1>}
                     {activeTab === "profile" && <h1 className="text-xl font-black text-gray-900 mt-1">Mój profil 👤</h1>}
                     {activeTab === "settings" && <h1 className="text-xl font-black text-gray-900 mt-1">Ustawienia ⚙️</h1>}
                     {showUpgradeToast && (
@@ -228,7 +318,7 @@ function DashboardContent() {
                 {activeTab === "home" && (
                     <main className="flex-1 px-4 py-4 space-y-4 pb-6">
                         <div className="grid grid-cols-2 gap-3">
-                            {[{ label: "Moja seria", streak: myStreak }, { label: "Seria Buddy", streak: mockBuddy.streak }].map((s) => (
+                            {[{ label: "Moja seria", streak: myStreak }, { label: "Seria Buddy", streak: buddy?.streak ?? 0 }].map((s) => (
                                 <div key={s.label} className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
                                     <p className="text-xs text-gray-400 font-semibold uppercase tracking-wide mb-1">{s.label}</p>
                                     <div className="flex items-center gap-2">
@@ -244,20 +334,40 @@ function DashboardContent() {
                         </div>
 
                         <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
-                            <div className="flex items-center gap-3">
-                                <div className="w-11 h-11 rounded-full bg-gradient-to-br from-green-400 to-emerald-600 flex items-center justify-center font-bold text-white text-sm shadow">{mockBuddy.avatar}</div>
-                                <div>
-                                    <p className="font-bold text-gray-900">{mockBuddy.name}, {mockBuddy.age}</p>
-                                    <p className="text-xs text-green-600 font-medium">✅ {mockBuddy.lastCheckin}</p>
+                            {buddy ? (
+                                <>
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-11 h-11 rounded-full bg-gradient-to-br from-green-400 to-emerald-600 flex items-center justify-center font-bold text-white text-sm shadow">
+                                            {buddy.name.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase() || "?"}
+                                        </div>
+                                        <div>
+                                            <p className="font-bold text-gray-900">{buddy.name}{buddy.age ? `, ${buddy.age}` : ""}</p>
+                                            <p className="text-xs text-green-600 font-medium">
+                                                {buddy.checkin_time ? `${CHECKIN_LABELS[buddy.checkin_time] ?? buddy.checkin_time} meldunek` : "Aktywny/-a"}
+                                            </p>
+                                        </div>
+                                        <button onClick={handleNudge} disabled={nudgeState === "sending"}
+                                            className={`ml-auto text-sm font-bold px-3 py-1.5 rounded-xl transition-all duration-200 disabled:opacity-60 ${nudgeState === "sent" ? "bg-green-100 text-green-600" : "bg-gray-100 hover:bg-green-100 text-gray-600 hover:text-green-600"}`}>
+                                            {nudgeState === "sending" ? "Wysyłam…" : nudgeState === "sent" ? "✓ Wysłano!" : nudgeState === "unavailable" ? "Wkrótce dostępne" : nudgeState === "error" ? "Błąd, spróbuj ponownie" : "Popchnij 👋"}
+                                        </button>
+                                    </div>
+                                    <div className="flex flex-wrap gap-2 mt-3">
+                                        {buddy.habits.map((habitId) => {
+                                            const habit = getById(habitId);
+                                            return habit ? <span key={habitId} className="text-xs bg-green-50 border border-green-100 text-green-700 font-medium px-2.5 py-1 rounded-full">{habit.icon} {habit.name}</span> : null;
+                                        })}
+                                    </div>
+                                </>
+                            ) : (
+                                <div className="flex items-center gap-3">
+                                    <div className="w-11 h-11 rounded-full bg-gray-100 flex items-center justify-center text-lg">🤝</div>
+                                    <div className="flex-1">
+                                        <p className="font-bold text-gray-900 text-sm">Nie masz jeszcze Buddy&apos;ego</p>
+                                        <p className="text-xs text-gray-400">Znajdź partnera do wspólnych nawyków</p>
+                                    </div>
+                                    <button onClick={() => router.push("/matching")} className="text-sm font-bold px-3 py-1.5 rounded-xl bg-green-500 text-white hover:bg-green-600 transition-colors">Szukaj</button>
                                 </div>
-                                <button onClick={() => { setNudgeSent(true); setTimeout(() => setNudgeSent(false), 3000); }}
-                                    className={`ml-auto text-sm font-bold px-3 py-1.5 rounded-xl transition-all duration-200 ${nudgeSent ? "bg-green-100 text-green-600" : "bg-gray-100 hover:bg-green-100 text-gray-600 hover:text-green-600"}`}>
-                                    {nudgeSent ? "✓ Wysłano!" : "Popchnij 👋"}
-                                </button>
-                            </div>
-                            <div className="flex flex-wrap gap-2 mt-3">
-                                {mockBuddy.goals.map((goal) => <span key={goal} className="text-xs bg-green-50 border border-green-100 text-green-700 font-medium px-2.5 py-1 rounded-full">{goal}</span>)}
-                            </div>
+                            )}
                             {/* Zmień Buddy */}
                             {buddyChange?.hasBuddy && (
                                 <div className="mt-3 pt-3 border-t border-gray-100">
@@ -346,20 +456,26 @@ function DashboardContent() {
                             </div>
                         )}
 
-                        <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
-                            <h3 className="font-bold text-gray-900 mb-3 flex items-center gap-2"><span>📋</span> Ostatnie aktywności Buddy</h3>
-                            <div className="space-y-3">
-                                {mockFeed.map((entry, i) => (
-                                    <div key={i} className="flex gap-3 items-start">
-                                        <div className={`mt-0.5 w-7 h-7 rounded-full flex-shrink-0 flex items-center justify-center text-sm font-bold ${entry.completed ? "bg-green-100 text-green-600" : "bg-red-100 text-red-600"}`}>{entry.completed ? "✓" : "✗"}</div>
-                                        <div className="flex-1 min-w-0">
-                                            <p className="text-xs text-gray-400 font-semibold mb-0.5">{entry.day}</p>
-                                            <p className="text-sm text-gray-700 leading-relaxed">{entry.note}</p>
-                                        </div>
+                        {buddy && (
+                            <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
+                                <h3 className="font-bold text-gray-900 mb-3 flex items-center gap-2"><span>📋</span> Ostatnie aktywności Buddy</h3>
+                                {feed.length > 0 ? (
+                                    <div className="space-y-3">
+                                        {feed.map((entry, i) => (
+                                            <div key={i} className="flex gap-3 items-start">
+                                                <div className={`mt-0.5 w-7 h-7 rounded-full flex-shrink-0 flex items-center justify-center text-sm font-bold ${entry.completed ? "bg-green-100 text-green-600" : "bg-red-100 text-red-600"}`}>{entry.completed ? "✓" : "✗"}</div>
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="text-xs text-gray-400 font-semibold mb-0.5">{entry.date}</p>
+                                                    <p className="text-sm text-gray-700 leading-relaxed">{entry.note || "Zameldował/-a się bez notatki"}</p>
+                                                </div>
+                                            </div>
+                                        ))}
                                     </div>
-                                ))}
+                                ) : (
+                                    <p className="text-sm text-gray-400">Brak jeszcze żadnej aktywności.</p>
+                                )}
                             </div>
-                        </div>
+                        )}
 
                         {subscriptionTier === "free" ? (
                             <UpgradePrompt feature="Szczegółowe statystyki i wykresy 📊" requiredTier="premium" />
@@ -404,7 +520,7 @@ function DashboardContent() {
                         </div>
 
                         <div className="grid grid-cols-3 gap-3">
-                            {[{ label: "Seria", value: `${myStreak} 🔥`, sub: "dni" }, { label: "Meldunki", value: "21", sub: "łącznie" }, { label: "Buddy", value: "1", sub: "aktywny" }].map((s) => (
+                            {[{ label: "Seria", value: `${myStreak} 🔥`, sub: "dni" }, { label: "Meldunki", value: `${totalCheckins}`, sub: "łącznie" }, { label: "Buddy", value: buddyChange?.hasBuddy ? "1" : "0", sub: buddyChange?.hasBuddy ? "aktywny" : "brak" }].map((s) => (
                                 <div key={s.label} className="bg-white rounded-2xl p-3 border border-gray-100 shadow-sm text-center">
                                     <p className="text-xs text-gray-400 font-semibold uppercase tracking-wide mb-1">{s.label}</p>
                                     <p className="text-lg font-black text-gray-900">{s.value}</p>
@@ -416,12 +532,18 @@ function DashboardContent() {
                         <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
                             <h3 className="font-bold text-gray-900 mb-3 flex items-center gap-2"><span>🎯</span> Moje nawyki</h3>
                             <div className="space-y-2">
-                                {["💧 Pij 2l wody dziennie", "🏃 30 min ruchu", "😴 Kładź się spać przed 23:00"].map((g) => (
-                                    <div key={g} className="flex items-center gap-3 bg-green-50 rounded-xl px-3 py-2.5">
-                                        <span className="w-5 h-5 rounded-full bg-green-500 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">✓</span>
-                                        <span className="text-sm font-medium text-gray-700">{g}</span>
-                                    </div>
-                                ))}
+                                {userHabits.length > 0 ? userHabits.map((habitId) => {
+                                    const habit = getById(habitId);
+                                    if (!habit) return null;
+                                    return (
+                                        <div key={habitId} className="flex items-center gap-3 bg-green-50 rounded-xl px-3 py-2.5">
+                                            <span className="w-5 h-5 rounded-full bg-green-500 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">✓</span>
+                                            <span className="text-sm font-medium text-gray-700">{habit.icon} {habit.name}</span>
+                                        </div>
+                                    );
+                                }) : (
+                                    <p className="text-sm text-gray-400">Brak wybranych nawyków.</p>
+                                )}
                             </div>
                             {subscriptionTier === "free" && <p className="text-xs text-gray-400 text-center mt-3">Max 2 nawyki w planie Free.{" "}<button onClick={() => router.push("/pricing")} className="text-green-600 font-semibold">Ulepsz →</button></p>}
                         </div>
@@ -491,8 +613,8 @@ function DashboardContent() {
                                     <span>Zarządzaj subskrypcją</span><span className="text-gray-300">›</span>
                                 </Link>
                                 <div className="h-px bg-gray-100" />
-                                <button className="w-full text-left text-sm font-semibold text-gray-700 hover:text-green-600 transition-colors py-1 flex items-center justify-between">
-                                    <span>Eksportuj moje dane</span><span className="text-gray-300">›</span>
+                                <button onClick={handleExport} disabled={exporting} className="w-full text-left text-sm font-semibold text-gray-700 hover:text-green-600 transition-colors py-1 flex items-center justify-between disabled:opacity-60">
+                                    <span>{exporting ? "Przygotowuję…" : "Eksportuj moje dane"}</span><span className="text-gray-300">›</span>
                                 </button>
                             </div>
                         </div>
@@ -504,9 +626,10 @@ function DashboardContent() {
                             ) : (
                                 <div className="bg-red-50 rounded-xl p-3 space-y-3">
                                     <p className="text-sm text-red-700 font-medium">Czy na pewno chcesz usunąć konto? Tej operacji nie można cofnąć.</p>
+                                    {deleteError && <p className="text-xs text-red-600 font-medium">❌ {deleteError}</p>}
                                     <div className="flex gap-2">
-                                        <button className="flex-1 bg-red-500 text-white font-bold py-2 rounded-lg text-sm hover:bg-red-600 transition-colors">Tak, usuń konto</button>
-                                        <button onClick={() => setShowDeleteConfirm(false)} className="flex-1 bg-gray-100 text-gray-700 font-bold py-2 rounded-lg text-sm hover:bg-gray-200 transition-colors">Anuluj</button>
+                                        <button onClick={handleDeleteAccount} disabled={deleting} className="flex-1 bg-red-500 text-white font-bold py-2 rounded-lg text-sm hover:bg-red-600 transition-colors disabled:opacity-60">{deleting ? "Usuwam…" : "Tak, usuń konto"}</button>
+                                        <button onClick={() => setShowDeleteConfirm(false)} disabled={deleting} className="flex-1 bg-gray-100 text-gray-700 font-bold py-2 rounded-lg text-sm hover:bg-gray-200 transition-colors disabled:opacity-60">Anuluj</button>
                                     </div>
                                 </div>
                             )}

@@ -1,11 +1,12 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
+import { auth } from '@clerk/nextjs/server'
 import { createClient } from '@supabase/supabase-js'
 import { stripe } from '@/lib/stripe'
 
-export async function POST(req: NextRequest) {
+export async function POST() {
     try {
-        const { userId } = await req.json()
-        if (!userId) return NextResponse.json({ error: 'Missing userId' }, { status: 400 })
+        const { userId } = await auth()
+        if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
         const supabase = createClient(
             process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -15,7 +16,7 @@ export async function POST(req: NextRequest) {
         const { data: profile } = await supabase
             .from('profiles')
             .select('stripe_customer_id')
-            .eq('id', userId)
+            .eq('clerk_user_id', userId)
             .single()
 
         if (!profile?.stripe_customer_id) {

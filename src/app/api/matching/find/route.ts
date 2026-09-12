@@ -1,10 +1,11 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
+import { auth } from '@clerk/nextjs/server'
 import { runMatchingFind } from '@/lib/matching-find'
 
-export async function POST(req: NextRequest) {
+export async function POST() {
     try {
-        const { userId } = await req.json()
-        if (!userId) return NextResponse.json({ error: 'Missing userId' }, { status: 400 })
+        const { userId } = await auth()
+        if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
         const result = await runMatchingFind(userId)
 

@@ -34,6 +34,7 @@ export async function POST(req: NextRequest) {
                 streak: streak ?? 0,
                 subscription_tier: subscription_tier ?? 'free',
                 created_at: created_at ?? new Date().toISOString(),
+                is_available_for_matching: true,
             }, { onConflict: 'clerk_user_id' })
 
         if (error) {

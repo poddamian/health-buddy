@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useUser } from "@clerk/nextjs";
-import { supabase } from "@/lib/supabase";
 import { getById } from "@/lib/habits";
 import type { SubscriptionTier } from "@/lib/stripe";
 
@@ -39,13 +38,9 @@ export default function MatchingPage() {
         return () => clearInterval(interval);
     }, [phase]);
 
-    const callFind = useCallback(async (uid: string) => {
+    const callFind = useCallback(async () => {
         try {
-            const res = await fetch("/api/matching/find", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ userId: uid, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }),
-            });
+            const res = await fetch("/api/matching/find", { method: "POST" });
             const data = await res.json();
             if (data.status === "matched") { setBuddy(data.buddy); setScore(data.score); setPhase("matched"); }
             else if (data.status === "queued") { setQueuePos(data.position); setPhase("queued"); }
@@ -62,18 +57,24 @@ export default function MatchingPage() {
             setUserId(uid);
 
             const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-            await supabase.from("profiles").update({ timezone: tz }).eq("clerk_user_id", uid);
+            await fetch("/api/profile/update", {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ timezone: tz }),
+            });
 
-            const { data: profile } = await supabase
-                .from("profiles").select("subscription_tier").eq("clerk_user_id", uid).single();
-            setSubscriptionTier((profile?.subscription_tier as SubscriptionTier) ?? "free");
+            const meRes = await fetch("/api/profile/me");
+            if (meRes.ok) {
+                const { profile } = await meRes.json();
+                setSubscriptionTier((profile?.subscription_tier as SubscriptionTier) ?? "free");
+            }
 
-            const statusRes = await fetch(`/api/matching/status?userId=${uid}`);
+            const statusRes = await fetch("/api/matching/status");
             const statusData = await statusRes.json();
 
             if (statusData.status === "matched") { setBuddy(statusData.buddy); setScore(statusData.score ?? 0); setPhase("matched"); }
             else if (statusData.status === "queued") { setQueuePos(statusData.position); setPhase("queued"); }
-            else { setPhase("searching"); setTimeout(() => callFind(uid), 3000); }
+            else { setPhase("searching"); setTimeout(() => callFind(), 3000); }
         };
         init();
     }, [isLoaded, isSignedIn, user, router, callFind]);
@@ -98,7 +99,7 @@ export default function MatchingPage() {
     const handleRecheck = async () => {
         if (!userId) return;
         setPhase("searching");
-        setTimeout(() => callFind(userId), 2000);
+        setTimeout(() => callFind(), 2000);
     };
 
     const avatarInitials = buddy?.name
@@ -212,7 +213,7 @@ export default function MatchingPage() {
                             <div className="w-20 h-20 rounded-full bg-red-50 border-2 border-red-200 flex items-center justify-center text-4xl mb-6">❌</div>
                             <h1 className="text-2xl font-black text-gray-900 mb-2">Coś poszło nie tak</h1>
                             <p className="text-gray-500 mb-6">{errorMsg}</p>
-                            <button onClick={() => { setPhase("searching"); if (userId) setTimeout(() => callFind(userId), 1000); }} className="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-3.5 rounded-2xl transition-all duration-200">Spróbuj ponownie</button>
+                            <button onClick={() => { setPhase("searching"); setTimeout(() => callFind(), 1000); }} className="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-3.5 rounded-2xl transition-all duration-200">Spróbuj ponownie</button>
                         </div>
                     )}
                 </main>
