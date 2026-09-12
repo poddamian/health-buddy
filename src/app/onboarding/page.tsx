@@ -24,6 +24,9 @@ export default function OnboardingPage() {
     const [name, setName] = useState("");
     const [age, setAge] = useState("");
     const [gender, setGender] = useState<"m" | "k" | "">("");
+    const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+    const [avatarUploading, setAvatarUploading] = useState(false);
+    const [avatarError, setAvatarError] = useState<string | null>(null);
     const [selectedHabits, setSelectedHabits] = useState<string[]>([]);
     const [selectedTime, setSelectedTime] = useState("");
     const [saving, setSaving] = useState(false);
@@ -71,6 +74,25 @@ export default function OnboardingPage() {
     const canProceedStep2 = selectedHabits.length >= 1;
     const canProceedStep3 = selectedTime !== "";
 
+    const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        setAvatarError(null);
+        setAvatarUploading(true);
+        try {
+            const formData = new FormData();
+            formData.append("file", file);
+            const res = await fetch("/api/profile/avatar", { method: "POST", body: formData });
+            const data = await res.json();
+            if (!res.ok) { setAvatarError(data.error ?? "Nie udało się wgrać zdjęcia"); return; }
+            setAvatarUrl(data.url);
+        } catch {
+            setAvatarError("Błąd sieci — spróbuj ponownie");
+        } finally {
+            setAvatarUploading(false);
+        }
+    };
+
     const handleNext = async () => {
         if (step < 3) { setStep(step + 1); return; }
         if (!isSignedIn || !user) { setSaveError("Sesja wygasła. Odśwież stronę."); return; }
@@ -85,6 +107,7 @@ export default function OnboardingPage() {
                 name: name.trim(),
                 age: parseInt(age, 10),
                 gender,
+                avatar_url: avatarUrl,
                 habits: selectedHabits,
                 goals: selectedHabits,
                 checkin_time: selectedTime,
@@ -135,7 +158,25 @@ export default function OnboardingPage() {
                     {step === 1 && (
                         <div>
                             <h1 className="text-2xl font-black text-gray-900 mb-1">Cześć! 👋</h1>
-                            <p className="text-gray-500 mb-8">Powiedz nam coś o sobie, byśmy mogli dobrać idealnego partnera.</p>
+                            <p className="text-gray-500 mb-6">Powiedz nam coś o sobie, byśmy mogli dobrać idealnego partnera.</p>
+
+                            <div className="flex flex-col items-center mb-6">
+                                <label className="relative cursor-pointer group">
+                                    <div className="w-24 h-24 rounded-full bg-gray-100 border-2 border-dashed border-gray-300 group-hover:border-green-400 flex items-center justify-center overflow-hidden transition-colors">
+                                        {avatarUploading ? (
+                                            <div className="w-6 h-6 rounded-full border-2 border-green-200 border-t-green-500 animate-spin" />
+                                        ) : avatarUrl ? (
+                                            // eslint-disable-next-line @next/next/no-img-element
+                                            <img src={avatarUrl} alt="Twoje zdjęcie profilowe" className="w-full h-full object-cover" />
+                                        ) : (
+                                            <span className="text-3xl">📷</span>
+                                        )}
+                                    </div>
+                                    <input type="file" accept="image/*" onChange={handleAvatarChange} disabled={avatarUploading} className="sr-only" />
+                                </label>
+                                <p className="text-xs text-gray-400 mt-2">{avatarUrl ? "Zmień zdjęcie (opcjonalnie)" : "Dodaj zdjęcie (opcjonalnie)"}</p>
+                                {avatarError && <p className="text-xs text-red-500 mt-1">{avatarError}</p>}
+                            </div>
                             <div className="space-y-5">
                                 <div>
                                     <label className="block text-sm font-semibold text-gray-700 mb-2">Twoje imię</label>

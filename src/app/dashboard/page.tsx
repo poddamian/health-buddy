@@ -44,6 +44,7 @@ function DashboardContent() {
     const [myStreak, setMyStreak] = useState(0);
     const [userName, setUserName] = useState("");
     const [userGender, setUserGender] = useState<Gender>(null);
+    const [userAvatarUrl, setUserAvatarUrl] = useState<string | null>(null);
     const [userEmail, setUserEmail] = useState("");
     const [clerkUserId, setClerkUserId] = useState<string | null>(null);
     const [subscriptionTier, setSubscriptionTier] = useState<SubscriptionTier>("free");
@@ -97,6 +98,7 @@ function DashboardContent() {
                     setMyStreak(profile.streak ?? 0);
                     setUserName(profile.name ?? "");
                     setUserGender((profile.gender as Gender) ?? null);
+                    setUserAvatarUrl((profile.avatar_url as string) ?? null);
                     setNameInput(profile.name ?? "");
                     setSubscriptionTier((profile.subscription_tier as SubscriptionTier) ?? "free");
                     setUserHabits((profile.habits as string[]) ?? []);
@@ -486,9 +488,10 @@ function DashboardContent() {
                         {subscriptionTier === "free" ? (
                             <UpgradePrompt feature="Szczegółowe statystyki i wykresy 📊" requiredTier="premium" />
                         ) : (
-                            <div className="grid grid-cols-2 gap-3">
-                                <button className="bg-white border border-gray-100 rounded-2xl p-4 text-center shadow-sm hover:border-green-300 hover:bg-green-50 transition-all"><span className="text-2xl block mb-1">💬</span><span className="text-sm font-semibold text-gray-700">Napisz wiadomość</span></button>
-                                <button className="bg-white border border-gray-100 rounded-2xl p-4 text-center shadow-sm hover:border-green-300 hover:bg-green-50 transition-all"><span className="text-2xl block mb-1">📊</span><span className="text-sm font-semibold text-gray-700">Statystyki</span></button>
+                            <div className="bg-white border border-gray-100 rounded-2xl p-4 text-center shadow-sm">
+                                <span className="text-2xl block mb-1">🚧</span>
+                                <p className="text-sm font-semibold text-gray-700">Wiadomości głosowe i statystyki</p>
+                                <p className="text-xs text-gray-400 mt-1">Już wkrótce w Twoim planie {tierLabel}</p>
                             </div>
                         )}
 
@@ -506,7 +509,12 @@ function DashboardContent() {
                 {activeTab === "profile" && (
                     <main className="flex-1 px-4 py-4 space-y-4 pb-6">
                         <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm flex flex-col items-center gap-3">
-                            <div className="w-20 h-20 rounded-full bg-gradient-to-br from-green-400 to-emerald-600 flex items-center justify-center font-black text-white text-2xl shadow-lg shadow-green-200">{avatarInitials}</div>
+                            <div className="w-20 h-20 rounded-full bg-gradient-to-br from-green-400 to-emerald-600 flex items-center justify-center font-black text-white text-2xl shadow-lg shadow-green-200 overflow-hidden">
+                                {userAvatarUrl ? (
+                                    // eslint-disable-next-line @next/next/no-img-element
+                                    <img src={userAvatarUrl} alt="Zdjęcie profilowe" className="w-full h-full object-cover" />
+                                ) : avatarInitials}
+                            </div>
                             {!editingName ? (
                                 <>
                                     <div className="text-center"><p className="text-xl font-black text-gray-900">{userName || "Brak nazwy"}</p><p className="text-sm text-gray-400">{userEmail}</p></div>

@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
         }
 
         const body = await req.json()
-        const { name, age, habits, goals, checkin_time, streak, subscription_tier, created_at, gender } = body
+        const { name, age, habits, goals, checkin_time, streak, subscription_tier, created_at, gender, avatar_url } = body
 
         const supabase = getAdminSupabase()
 
@@ -31,6 +31,7 @@ export async function POST(req: NextRequest) {
                 habits,
                 goals,
                 gender: gender === 'm' || gender === 'k' ? gender : null,
+                avatar_url: typeof avatar_url === 'string' && avatar_url ? avatar_url : null,
                 checkin_time,
                 streak: streak ?? 0,
                 subscription_tier: subscription_tier ?? 'free',

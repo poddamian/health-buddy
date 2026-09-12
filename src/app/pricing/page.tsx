@@ -28,6 +28,7 @@ const PLANS = [
             { label: "AI Buddy Coach", ok: false },
             { label: "Eksport PDF", ok: false },
         ],
+        comingSoon: [] as string[],
     },
     {
         id: "premium" as SubscriptionTier,
@@ -41,13 +42,14 @@ const PLANS = [
         buttonClass: "bg-green-500 text-white hover:bg-green-600 shadow-lg shadow-green-200",
         features: [
             { label: "Nieograniczone nawyki", ok: true },
-            { label: "Filtry buddich", ok: true },
-            { label: "Wiadomości głosowe (30 sek)", ok: true },
-            { label: "Szczegółowe statystyki i wykresy", ok: true },
+            { label: "Filtry buddich", ok: false },
+            { label: "Wiadomości głosowe (30 sek)", ok: false },
+            { label: "Szczegółowe statystyki i wykresy", ok: false },
             { label: "Grupy (do 5 osób)", ok: false },
             { label: "AI Buddy Coach", ok: false },
             { label: "Eksport PDF", ok: false },
         ],
+        comingSoon: ["Filtry buddich", "Wiadomości głosowe", "Szczegółowe statystyki i wykresy"],
     },
     {
         id: "pro" as SubscriptionTier,
@@ -61,10 +63,11 @@ const PLANS = [
         buttonClass: "bg-gray-900 text-white hover:bg-gray-800",
         features: [
             { label: "Wszystko z Premium", ok: true },
-            { label: "Grupy do 5 osób", ok: true },
-            { label: "AI Buddy Coach (codzienne wskazówki)", ok: true },
-            { label: "Eksport postępów PDF", ok: true },
+            { label: "Grupy do 5 osób", ok: false },
+            { label: "AI Buddy Coach (codzienne wskazówki)", ok: false },
+            { label: "Eksport postępów PDF", ok: false },
         ],
+        comingSoon: ["Grupy do 5 osób", "AI Buddy Coach", "Eksport postępów PDF"],
     },
 ];
 
@@ -207,6 +210,12 @@ export default function PricingPage() {
                                             </li>
                                         ))}
                                     </ul>
+
+                                    {plan.comingSoon.length > 0 && (
+                                        <p className="text-xs text-gray-400 mb-5 -mt-3">
+                                            🚧 {plan.comingSoon.join(", ")} — już wkrótce
+                                        </p>
+                                    )}
 
                                     {/* CTA Button */}
                                     {isCurrent ? (
