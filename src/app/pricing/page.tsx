@@ -42,14 +42,14 @@ const PLANS = [
         buttonClass: "bg-green-500 text-white hover:bg-green-600 shadow-lg shadow-green-200",
         features: [
             { label: "Nieograniczone nawyki", ok: true },
+            { label: "Szczegółowe statystyki i wykresy", ok: true },
             { label: "Filtry buddich", ok: false },
             { label: "Wiadomości głosowe (30 sek)", ok: false },
-            { label: "Szczegółowe statystyki i wykresy", ok: false },
             { label: "Grupy (do 5 osób)", ok: false },
             { label: "AI Buddy Coach", ok: false },
             { label: "Eksport PDF", ok: false },
         ],
-        comingSoon: ["Filtry buddich", "Wiadomości głosowe", "Szczegółowe statystyki i wykresy"],
+        comingSoon: ["Filtry buddich", "Wiadomości głosowe"],
     },
     {
         id: "pro" as SubscriptionTier,

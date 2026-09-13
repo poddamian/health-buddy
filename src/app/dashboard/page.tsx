@@ -5,8 +5,11 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useUser, useClerk, UserButton } from "@clerk/nextjs";
 import UpgradePrompt from "@/components/UpgradePrompt";
+import HabitCard from "@/components/HabitCard";
+import StatsPanel from "@/components/StatsPanel";
 import type { SubscriptionTier } from "@/lib/stripe";
-import { getById } from "@/lib/habits";
+import { FEATURES } from "@/lib/stripe";
+import { getById, CATEGORIES, getByCategory, type HabitCategory } from "@/lib/habits";
 import { conj, toInstrumental, type Gender } from "@/lib/grammar";
 
 interface BuddyInfo {
@@ -62,6 +65,11 @@ function DashboardContent() {
     const [nameInput, setNameInput] = useState("");
     const [nameSaving, setNameSaving] = useState(false);
     const [userHabits, setUserHabits] = useState<string[]>([]);
+    const [editingHabits, setEditingHabits] = useState(false);
+    const [draftHabits, setDraftHabits] = useState<string[]>([]);
+    const [habitCategory, setHabitCategory] = useState<HabitCategory | "all">("all");
+    const [habitsSaving, setHabitsSaving] = useState(false);
+    const [habitsError, setHabitsError] = useState<string | null>(null);
     const [checkedHabits, setCheckedHabits] = useState<Set<string>>(new Set());
     const [notifBuddy, setNotifBuddy] = useState(true);
     const [notifStreak, setNotifStreak] = useState(true);
@@ -91,18 +99,24 @@ function DashboardContent() {
             setClerkUserId(uid);
             setUserEmail(user.primaryEmailAddress?.emailAddress ?? "");
 
-            const profileRes = await fetch("/api/profile/me");
-            if (profileRes.ok) {
-                const { profile } = await profileRes.json();
-                if (profile) {
-                    setMyStreak(profile.streak ?? 0);
-                    setUserName(profile.name ?? "");
-                    setUserGender((profile.gender as Gender) ?? null);
-                    setUserAvatarUrl((profile.avatar_url as string) ?? null);
-                    setNameInput(profile.name ?? "");
-                    setSubscriptionTier((profile.subscription_tier as SubscriptionTier) ?? "free");
-                    setUserHabits((profile.habits as string[]) ?? []);
-                }
+            const justUpgraded = searchParams.get("upgraded") === "true";
+            let profile: Record<string, unknown> | null = null;
+            for (let attempt = 0; attempt < (justUpgraded ? 5 : 1); attempt++) {
+                if (attempt > 0) await new Promise((r) => setTimeout(r, 1500));
+                const profileRes = await fetch("/api/profile/me");
+                if (!profileRes.ok) break;
+                ({ profile } = await profileRes.json());
+                // Stripe's webhook lands async — keep polling briefly until the upgrade shows up
+                if (!justUpgraded || profile?.subscription_tier !== "free") break;
+            }
+            if (profile) {
+                setMyStreak((profile.streak as number) ?? 0);
+                setUserName((profile.name as string) ?? "");
+                setUserGender((profile.gender as Gender) ?? null);
+                setUserAvatarUrl((profile.avatar_url as string) ?? null);
+                setNameInput((profile.name as string) ?? "");
+                setSubscriptionTier((profile.subscription_tier as SubscriptionTier) ?? "free");
+                setUserHabits((profile.habits as string[]) ?? []);
             }
 
             // Check today's checkin via API (uses UUID internally)
@@ -193,6 +207,45 @@ function DashboardContent() {
     };
 
     const handleLogout = async () => { await signOut(); router.push("/"); };
+
+    const maxHabits = FEATURES.max_habits[subscriptionTier];
+
+    const startEditingHabits = () => {
+        setDraftHabits(userHabits);
+        setHabitsError(null);
+        setEditingHabits(true);
+    };
+
+    const toggleDraftHabit = (id: string) => {
+        setHabitsError(null);
+        setDraftHabits((prev) => {
+            if (prev.includes(id)) return prev.filter((h) => h !== id);
+            if (prev.length >= maxHabits) {
+                setHabitsError(`Plan ${tierLabel} pozwala na maksymalnie ${maxHabits === Infinity ? "∞" : maxHabits} nawyków`);
+                return prev;
+            }
+            return [...prev, id];
+        });
+    };
+
+    const handleSaveHabits = async () => {
+        setHabitsSaving(true);
+        setHabitsError(null);
+        const res = await fetch("/api/profile/update", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ habits: draftHabits }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+            setHabitsError(data.error ?? "Nie udało się zapisać nawyków");
+            setHabitsSaving(false);
+            return;
+        }
+        setUserHabits(draftHabits);
+        setEditingHabits(false);
+        setHabitsSaving(false);
+    };
 
     const handleNudge = async () => {
         setNudgeState("sending");
@@ -306,6 +359,9 @@ function DashboardContent() {
                                 <span className="font-bold text-orange-600 text-sm">{myStreak} dni</span>
                             </div>
                             <UserButton />
+                            <button onClick={handleLogout} title="Wyloguj się" className="text-gray-400 hover:text-red-500 transition-colors">
+                                <span className="text-lg">🚪</span>
+                            </button>
                         </div>
                     </div>
                     {activeTab === "home" && <h1 className="text-xl font-black text-gray-900 mt-1">Cześć{user?.firstName ? `, ${user.firstName}` : userName ? `, ${userName}` : ""}!{buddy ? ` Dzień z ${toInstrumental(buddy.name)} 🔥` : " 👋"}</h1>}
@@ -488,11 +544,7 @@ function DashboardContent() {
                         {subscriptionTier === "free" ? (
                             <UpgradePrompt feature="Szczegółowe statystyki i wykresy 📊" requiredTier="premium" />
                         ) : (
-                            <div className="bg-white border border-gray-100 rounded-2xl p-4 text-center shadow-sm">
-                                <span className="text-2xl block mb-1">🚧</span>
-                                <p className="text-sm font-semibold text-gray-700">Wiadomości głosowe i statystyki</p>
-                                <p className="text-xs text-gray-400 mt-1">Już wkrótce w Twoim planie {tierLabel}</p>
-                            </div>
+                            <StatsPanel />
                         )}
 
                         {subscriptionTier === "free" && (
@@ -544,22 +596,66 @@ function DashboardContent() {
                         </div>
 
                         <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
-                            <h3 className="font-bold text-gray-900 mb-3 flex items-center gap-2"><span>🎯</span> Moje nawyki</h3>
-                            <div className="space-y-2">
-                                {userHabits.length > 0 ? userHabits.map((habitId) => {
-                                    const habit = getById(habitId);
-                                    if (!habit) return null;
-                                    return (
-                                        <div key={habitId} className="flex items-center gap-3 bg-green-50 rounded-xl px-3 py-2.5">
-                                            <span className="w-5 h-5 rounded-full bg-green-500 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">✓</span>
-                                            <span className="text-sm font-medium text-gray-700">{habit.icon} {habit.name}</span>
-                                        </div>
-                                    );
-                                }) : (
-                                    <p className="text-sm text-gray-400">Brak wybranych nawyków.</p>
+                            <div className="flex items-center justify-between mb-3">
+                                <h3 className="font-bold text-gray-900 flex items-center gap-2"><span>🎯</span> Moje nawyki</h3>
+                                {!editingHabits && (
+                                    <button onClick={startEditingHabits} className="text-xs font-semibold text-green-600 hover:text-green-700">Edytuj →</button>
                                 )}
                             </div>
-                            {subscriptionTier === "free" && <p className="text-xs text-gray-400 text-center mt-3">Max 2 nawyki w planie Free.{" "}<button onClick={() => router.push("/pricing")} className="text-green-600 font-semibold">Ulepsz →</button></p>}
+
+                            {!editingHabits ? (
+                                <>
+                                    <div className="space-y-2">
+                                        {userHabits.length > 0 ? userHabits.map((habitId) => {
+                                            const habit = getById(habitId);
+                                            if (!habit) return null;
+                                            return (
+                                                <div key={habitId} className="flex items-center gap-3 bg-green-50 rounded-xl px-3 py-2.5">
+                                                    <span className="w-5 h-5 rounded-full bg-green-500 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">✓</span>
+                                                    <span className="text-sm font-medium text-gray-700">{habit.icon} {habit.name}</span>
+                                                </div>
+                                            );
+                                        }) : (
+                                            <p className="text-sm text-gray-400">Brak wybranych nawyków.</p>
+                                        )}
+                                    </div>
+                                    {subscriptionTier === "free" && <p className="text-xs text-gray-400 text-center mt-3">Max 2 nawyki w planie Free.{" "}<button onClick={() => router.push("/pricing")} className="text-green-600 font-semibold">Ulepsz →</button></p>}
+                                </>
+                            ) : (
+                                <div className="animate-fade-in">
+                                    <div className="flex items-center justify-between mb-3">
+                                        <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${draftHabits.length >= maxHabits ? "bg-orange-100 text-orange-600" : "bg-green-100 text-green-700"}`}>
+                                            {draftHabits.length}/{maxHabits === Infinity ? "∞" : maxHabits}
+                                        </span>
+                                    </div>
+
+                                    <div className="flex gap-1.5 overflow-x-auto pb-2 mb-3 -mx-1 px-1">
+                                        {CATEGORIES.map((cat) => (
+                                            <button key={cat.id} onClick={() => setHabitCategory(cat.id)}
+                                                className={`flex-shrink-0 text-xs font-semibold px-3 py-1.5 rounded-full transition-colors ${habitCategory === cat.id ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-500"}`}>
+                                                {cat.icon} {cat.label}
+                                            </button>
+                                        ))}
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-2 max-h-96 overflow-y-auto mb-3">
+                                        {getByCategory(habitCategory).map((habit) => {
+                                            const isSelected = draftHabits.includes(habit.id);
+                                            return <HabitCard key={habit.id} habit={habit} selected={isSelected} disabled={!isSelected && draftHabits.length >= maxHabits} onClick={() => toggleDraftHabit(habit.id)} />;
+                                        })}
+                                    </div>
+
+                                    {habitsError && <p className="text-xs text-red-500 text-center mb-3">{habitsError}</p>}
+
+                                    <div className="flex gap-2">
+                                        <button onClick={handleSaveHabits} disabled={habitsSaving || draftHabits.length === 0}
+                                            className="flex-1 bg-green-500 hover:bg-green-600 disabled:opacity-60 text-white font-bold py-2.5 rounded-xl text-sm transition-all">
+                                            {habitsSaving ? "Zapisuję…" : "Zapisz"}
+                                        </button>
+                                        <button onClick={() => setEditingHabits(false)} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-2.5 rounded-xl text-sm transition-all">Anuluj</button>
+                                    </div>
+                                </div>
+                            )}
                         </div>
 
                         <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">

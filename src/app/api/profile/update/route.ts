@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import { createClient } from '@supabase/supabase-js'
+import { FEATURES, type SubscriptionTier } from '@/lib/stripe'
+import { HABITS } from '@/lib/habits'
 
 function getAdminSupabase() {
     return createClient(
@@ -9,7 +11,7 @@ function getAdminSupabase() {
     )
 }
 
-// Partial profile update (name, timezone) for the currently signed-in user only.
+// Partial profile update (name, timezone, habits) for the currently signed-in user only.
 export async function PATCH(req: NextRequest) {
     try {
         const { userId } = await auth()
@@ -17,17 +19,37 @@ export async function PATCH(req: NextRequest) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
         }
 
-        const { name, timezone } = await req.json()
+        const { name, timezone, habits } = await req.json()
 
-        const update: Record<string, string> = {}
+        const update: Record<string, string | string[]> = {}
         if (typeof name === 'string' && name.trim()) update.name = name.trim()
         if (typeof timezone === 'string' && timezone.trim()) update.timezone = timezone.trim()
+
+        const supabase = getAdminSupabase()
+
+        if (Array.isArray(habits)) {
+            const validHabitIds = new Set(HABITS.map((h) => h.id))
+            const cleanHabits = [...new Set(habits.filter((h) => typeof h === 'string' && validHabitIds.has(h)))]
+
+            const { data: profile } = await supabase
+                .from('profiles')
+                .select('subscription_tier')
+                .eq('clerk_user_id', userId)
+                .single()
+            const tier = (profile?.subscription_tier as SubscriptionTier) ?? 'free'
+            const maxHabits = FEATURES.max_habits[tier]
+
+            if (cleanHabits.length > maxHabits) {
+                return NextResponse.json({ error: `Plan ${tier} pozwala na maksymalnie ${maxHabits} nawyków` }, { status: 403 })
+            }
+
+            update.habits = cleanHabits
+        }
 
         if (Object.keys(update).length === 0) {
             return NextResponse.json({ error: 'No valid fields to update' }, { status: 400 })
         }
 
-        const supabase = getAdminSupabase()
         const { error } = await supabase
             .from('profiles')
             .update(update)
