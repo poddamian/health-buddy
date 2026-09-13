@@ -68,7 +68,14 @@ export async function getOrCreateStripeCustomer(
         .eq('clerk_user_id', userId)
         .single()
 
-    if (profile?.stripe_customer_id) return profile.stripe_customer_id
+    if (profile?.stripe_customer_id) {
+        try {
+            const existing = await stripe.customers.retrieve(profile.stripe_customer_id)
+            if (!existing.deleted) return existing.id
+        } catch {
+            // stale id (e.g. left over from Stripe test mode) — fall through and create a new one
+        }
+    }
 
     // Create new customer
     const customer = await stripe.customers.create({ email, metadata: { clerk_user_id: userId } })
