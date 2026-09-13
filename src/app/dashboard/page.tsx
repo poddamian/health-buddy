@@ -7,8 +7,7 @@ import { useUser, useClerk, UserButton } from "@clerk/nextjs";
 import UpgradePrompt from "@/components/UpgradePrompt";
 import HabitCard from "@/components/HabitCard";
 import StatsPanel from "@/components/StatsPanel";
-import type { SubscriptionTier } from "@/lib/stripe";
-import { FEATURES } from "@/lib/stripe";
+import { FEATURES, type SubscriptionTier } from "@/lib/features";
 import { getById, CATEGORIES, getByCategory, type HabitCategory } from "@/lib/habits";
 import { conj, toInstrumental, type Gender } from "@/lib/grammar";
 

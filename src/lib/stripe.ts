@@ -1,24 +1,13 @@
 import Stripe from 'stripe'
 import { createClient } from '@supabase/supabase-js'
+import type { SubscriptionTier } from './features'
+
+export type { SubscriptionTier } from './features'
 
 // Server-side Stripe client
 export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
     apiVersion: '2026-02-25.clover',
 })
-
-// Feature map per plan
-export const FEATURES = {
-    max_habits: { free: 2, premium: Infinity, pro: Infinity },
-    buddy_filters: { free: false, premium: true, pro: true },
-    voice_messages: { free: false, premium: true, pro: true },
-    statistics: { free: false, premium: true, pro: true },
-    groups: { free: false, premium: false, pro: true },
-    ai_coach: { free: false, premium: false, pro: true },
-    pdf_export: { free: false, premium: false, pro: true },
-} as const
-
-export type SubscriptionTier = 'free' | 'premium' | 'pro'
-export type Feature = keyof typeof FEATURES
 
 // Map Stripe price IDs to tiers
 export function getTierFromPriceId(priceId: string): SubscriptionTier {
@@ -45,14 +34,6 @@ export async function getUserSubscriptionTier(userId: string): Promise<Subscript
         .single()
 
     return (data?.subscription_tier as SubscriptionTier) ?? 'free'
-}
-
-// Check if a tier can access a given feature
-export function canAccessFeature(tier: SubscriptionTier, feature: Feature): boolean {
-    const value = FEATURES[feature][tier]
-    if (typeof value === 'boolean') return value
-    if (typeof value === 'number') return value > 0
-    return false
 }
 
 // Get or create a Stripe customer for a user

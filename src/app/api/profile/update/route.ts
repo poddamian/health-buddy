@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import { createClient } from '@supabase/supabase-js'
-import { FEATURES, type SubscriptionTier } from '@/lib/stripe'
+import { FEATURES, type SubscriptionTier } from '@/lib/features'
 import { HABITS } from '@/lib/habits'
 
 function getAdminSupabase() {
