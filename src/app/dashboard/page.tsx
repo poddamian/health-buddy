@@ -358,8 +358,8 @@ function DashboardContent() {
                                 <span className="font-bold text-orange-600 text-sm">{myStreak} dni</span>
                             </div>
                             <UserButton />
-                            <button onClick={handleLogout} title="Wyloguj się" className="text-gray-400 hover:text-red-500 transition-colors">
-                                <span className="text-lg">🚪</span>
+                            <button onClick={handleLogout} title="Wyloguj się" className="w-8 h-8 rounded-full bg-gray-100 hover:bg-red-50 text-gray-500 hover:text-red-500 flex items-center justify-center transition-colors">
+                                <span className="text-sm">🚪</span>
                             </button>
                         </div>
                     </div>
