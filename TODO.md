@@ -1,31 +1,5 @@
 # Health Buddy — do zrobienia
 
-Aktualizacja: 2026-09-13. Aplikacja **live na produkcji**: https://health-buddy-plum.vercel.app (docelowo `healthbuddy.pl`)
-Repo: `github.com/poddamian/health-buddy`. Supabase: projekt `soenomaktdfxrisdvkyl`. Stripe: konto "Health-Buddy-App", `acct_1T7H3C93fCbPzUVA` — **weryfikacja tożsamości zakończona, wypłaty odblokowane**.
-
-## W toku — przejście Stripe na tryb Live
-
-Kod (checkout/webhook/portal w `src/app/api/stripe/*`, `src/lib/stripe.ts`) korzysta wyłącznie ze zmiennych środowiskowych, nie wymagał zmian.
-
-- [x] Produkty/ceny Premium (29 zł, `price_1UFGzyQ8QTeeawRtmnLD2BY0`) i Pro (59 zł, `price_1UFGzzQ8QTeeawRt0t0GMn0k`) utworzone w trybie Live
-- [x] Webhook Live na `/api/stripe/webhook` utworzony (`we_1UFGzzQ8QTeeawRtWrHq9Aq3`)
-- [x] `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `NEXT_PUBLIC_STRIPE_PREMIUM_PRICE_ID`, `NEXT_PUBLIC_STRIPE_PRO_PRICE_ID` ustawione w Vercel dla środowiska Production (Preview zostaje na test mode celowo, żeby podglądy PR nie robiły prawdziwych obciążeń)
-- [x] Redeploy produkcji wykonany 2026-09-13 (`dpl_9QRHknfzPDM3hNS3Msa1TWPRu7Dq`, zaaliasowany na healthbuddy.pl) — od teraz działa Stripe Live
-- [x] Test pełnej ścieżki płatności na produkcji prawdziwą kartą — udany (Premium), po drodze wypłynęły i zostały naprawione 2 buga: stary `stripe_customer_id` z trybu testowego w Supabase powodował 500 na checkout; import `FEATURES` do klienckiego dashboardu ciągnął cały serwerowy Stripe SDK do bundla przeglądarki (`new Stripe(...)` bez klucza w przeglądarce crashował każdą stronę) — wydzielone do `src/lib/features.ts`
-
-## Zgłoszone, naprawione (do potwierdzenia po deployu)
-
-- **Przyciski nie wyglądały klikalnie** — Tailwind v4 resetuje `button { cursor: default }` w całej apce, więc żaden przycisk (w tym ikonka wylogowania w nagłówku dashboardu) nie pokazywał kursora "łapki". Dodano globalną regułę `cursor: pointer` dla przycisków w `src/app/globals.css`, a ikonkę wylogowania obudowano widocznym tłem (koło, hover na czerwono), żeby było wiadomo że to przycisk.
-
-## Znany limit — matching czasem nie znajduje buddy'ego
-
-Dla konta testowego poddamian@gmail.com (profil "Ania") matching nie znalazł pary — **to nie bug, tylko efekt małej bazy profili**. Diagnoza: jedyny dostępny kandydat to "Antek" (profil testowy), wynik dopasowania Ania↔Antek = 30/100 (brak wspólnych nawyków, różne pory check-inu, różnica wieku 22 lata), a próg `MIN_MATCH_SCORE` w `src/lib/matching.ts` to 40 — więc trafia do kolejki (`matching_queue`) zamiast dostać buddy'ego. Algorytm działa zgodnie z założeniem, po prostu obecna pula profili (głównie konta testowe: Kasia/Ania/Antek/Marek/Testowa3) jest za mała i niekompatybilna.
-
-Do decyzji przed realnym startem:
-- Obniżyć `MIN_MATCH_SCORE` (mniej trafne dopasowania, ale mniej osób utknie w kolejce przy małej bazie)
-- Dodać widoczny fallback w UI, gdy user wisi w kolejce dłużej niż X dni (np. "poszerzyliśmy kryteria")
-- Nic nie zmieniać — przy realnych użytkownikach (szersza baza) problem sam zniknie; potraktować jako spodziewane zachowanie na etapie testów
-
 ## Do zrobienia po propagacji domeny
 
 - **Clerk → Production** — wymaga własnej domeny z DNS (teraz będzie gotowa) + własnych danych OAuth zamiast współdzielonych kluczy testowych Google/Facebook/Apple (obecnie w trybie Development, limit userów, banner na ekranach logowania)
