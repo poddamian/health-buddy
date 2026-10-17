@@ -344,22 +344,22 @@ function DashboardContent() {
             <div className="w-full max-w-[430px] flex flex-col min-h-screen">
                 {/* Header */}
                 <header className="bg-white px-6 py-5 border-b border-gray-100 sticky top-0 z-10">
-                    <div className="flex items-center justify-between mb-1">
-                        <div className="flex items-center gap-2">
-                            <span className="text-xl">💚</span>
-                            <span className="font-bold text-gray-900">Health Buddy</span>
+                    <div className="flex items-center justify-between gap-3 mb-1">
+                        <div className="flex items-center gap-2 min-w-0">
+                            <span className="text-xl shrink-0">💚</span>
+                            <span className="font-bold text-gray-900 truncate hidden min-[400px]:inline">Health Buddy</span>
                         </div>
-                        <div className="flex items-center gap-2">
-                            <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${tierColor}`}>
-                                {subscriptionTier === "premium" ? "PREMIUM ⭐" : subscriptionTier === "pro" ? "PRO 🚀" : "FREE"}
+                        <div className="flex items-center gap-2.5 shrink-0">
+                            <span className={`text-xs font-bold px-2.5 py-1 rounded-full whitespace-nowrap ${tierColor}`}>
+                                {subscriptionTier === "premium" ? "PREMIUM" : subscriptionTier === "pro" ? "PRO" : "FREE"}
                             </span>
-                            <div className="flex items-center gap-1.5 bg-orange-50 rounded-full px-3 py-1.5">
-                                <span>🔥</span>
+                            <div className="flex items-center gap-1 bg-orange-50 rounded-full px-2.5 py-1 whitespace-nowrap">
+                                <span className="text-sm">🔥</span>
                                 <span className="font-bold text-orange-600 text-sm">{myStreak} dni</span>
                             </div>
                             <UserButton />
-                            <button onClick={handleLogout} title="Wyloguj się" className="w-8 h-8 rounded-full bg-gray-100 hover:bg-red-50 text-gray-500 hover:text-red-500 flex items-center justify-center transition-colors">
-                                <span className="text-sm">🚪</span>
+                            <button onClick={handleLogout} title="Wyloguj się" aria-label="Wyloguj się" className="w-8 h-8 shrink-0 rounded-full bg-gray-100 hover:bg-red-50 text-gray-500 hover:text-red-500 flex items-center justify-center transition-colors">
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
                             </button>
                         </div>
                     </div>

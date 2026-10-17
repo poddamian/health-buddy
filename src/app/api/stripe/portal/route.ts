@@ -20,7 +20,7 @@ export async function POST() {
             .single()
 
         if (!profile?.stripe_customer_id) {
-            return NextResponse.json({ error: 'No Stripe customer found' }, { status: 404 })
+            return NextResponse.json({ error: 'Nie znaleziono subskrypcji dla tego konta.' }, { status: 404 })
         }
 
         const portalSession = await stripe.billingPortal.sessions.create({
@@ -31,6 +31,12 @@ export async function POST() {
         return NextResponse.json({ url: portalSession.url })
     } catch (err) {
         console.error('portal error:', err)
-        return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+        // Most common cause in a fresh live account: the Customer Portal was
+        // never saved in Stripe Dashboard → Settings → Billing → Customer portal.
+        const message = err instanceof Error ? err.message : 'Unknown error'
+        return NextResponse.json(
+            { error: 'Nie udało się otworzyć panelu subskrypcji. Spróbuj ponownie później.', detail: message },
+            { status: 500 }
+        )
     }
 }

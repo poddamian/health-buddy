@@ -78,6 +78,7 @@ export default function PricingPage() {
     const [userId, setUserId] = useState<string | null>(null);
     const [userEmail, setUserEmail] = useState<string>("");
     const [loading, setLoading] = useState<string | null>(null);
+    const [portalError, setPortalError] = useState<string | null>(null);
 
     useEffect(() => {
         if (!isLoaded || !isSignedIn || !user) return;
@@ -97,6 +98,9 @@ export default function PricingPage() {
         if (!plan.priceId) return; // free plan – do nothing
         if (!userId) { router.push("/sign-in"); return; }
         if (currentTier === plan.id) return;
+        // Already paying: a new checkout would start a second, parallel subscription.
+        // Plan switches go through the Stripe portal instead.
+        if (currentTier && currentTier !== "free") { handleManagePortal(); return; }
 
         setLoading(plan.id);
         try {
@@ -106,18 +110,26 @@ export default function PricingPage() {
                 body: JSON.stringify({ priceId: plan.priceId, email: userEmail }),
             });
             const { url } = await res.json();
-            if (url) window.location.href = url;
+            if (url) window.location.assign(url);
         } catch {
             setLoading(null);
         }
     };
 
+    // Stripe's Customer Portal handles cancelling (back to Free), switching plans and cards.
     const handleManagePortal = async () => {
         if (!userId) return;
         setLoading("portal");
-        const res = await fetch("/api/stripe/portal", { method: "POST" });
-        const { url } = await res.json();
-        if (url) window.location.href = url;
+        setPortalError(null);
+        try {
+            const res = await fetch("/api/stripe/portal", { method: "POST" });
+            const { url, error } = await res.json();
+            if (url) { window.location.assign(url); return; }
+            setPortalError(error ?? "Nie udało się otworzyć panelu subskrypcji.");
+        } catch {
+            setPortalError("Nie udało się otworzyć panelu subskrypcji.");
+        }
+        setLoading(null);
     };
 
     return (
@@ -133,15 +145,6 @@ export default function PricingPage() {
                         <span className="text-xl">💚</span>
                         <span className="font-bold text-gray-900">Health Buddy</span>
                     </Link>
-                    {currentTier && currentTier !== "free" && (
-                        <button
-                            onClick={handleManagePortal}
-                            disabled={loading === "portal"}
-                            className="ml-auto text-xs font-semibold text-gray-500 hover:text-gray-700 transition-colors"
-                        >
-                            {loading === "portal" ? "Ładowanie…" : "Zarządzaj subskrypcją →"}
-                        </button>
-                    )}
                 </header>
 
                 <main className="flex-1 px-4 pb-10 animate-fade-in">
@@ -159,6 +162,22 @@ export default function PricingPage() {
                             Zacznij za darmo. Ulepsz gdy będziesz gotowy.
                         </p>
                     </div>
+
+                    {currentTier && currentTier !== "free" && (
+                        <div className="mb-6 bg-gray-50 border border-gray-200 rounded-2xl p-4 text-center">
+                            <p className="text-sm text-gray-600 mb-3">
+                                Chcesz anulować, zmienić plan albo kartę?
+                            </p>
+                            <button
+                                onClick={handleManagePortal}
+                                disabled={loading === "portal"}
+                                className="w-full py-3 rounded-2xl bg-white border-2 border-gray-200 text-sm font-bold text-gray-700 hover:border-gray-300 active:scale-95 disabled:opacity-60 transition-all duration-200"
+                            >
+                                {loading === "portal" ? "Ładowanie…" : "Zarządzaj subskrypcją →"}
+                            </button>
+                            {portalError && <p className="text-xs text-red-500 mt-2">{portalError}</p>}
+                        </div>
+                    )}
 
                     {/* Plan cards */}
                     <div className="space-y-4">
@@ -222,6 +241,19 @@ export default function PricingPage() {
                                         <div className="w-full py-3 rounded-2xl bg-green-50 border border-green-200 text-center text-sm font-bold text-green-600">
                                             ✓ Aktywny plan
                                         </div>
+                                    ) : plan.id === "free" && currentTier && currentTier !== "free" ? (
+                                        <>
+                                            <button
+                                                onClick={handleManagePortal}
+                                                disabled={loading === "portal"}
+                                                className={`w-full py-3.5 rounded-2xl font-bold text-sm active:scale-95 disabled:opacity-60 transition-all duration-200 ${plan.buttonClass}`}
+                                            >
+                                                {loading === "portal" ? "Ładowanie…" : "Wróć na Free (anuluj subskrypcję)"}
+                                            </button>
+                                            <p className="text-xs text-gray-400 text-center mt-2">
+                                                Opłacony okres wykorzystasz do końca, potem nie pobierzemy już opłaty.
+                                            </p>
+                                        </>
                                     ) : plan.id === "free" ? (
                                         <button
                                             onClick={() => router.push(userId ? "/dashboard" : "/zarejestruj-sie")}

@@ -1,35 +1,41 @@
 # Health Buddy — do zrobienia
 
-## Do zrobienia po propagacji domeny
+## 1. Teraz (szybkie, ~30 min razem)
 
-- **Clerk → Production** — wymaga własnej domeny z DNS (teraz będzie gotowa) + własnych danych OAuth zamiast współdzielonych kluczy testowych Google/Facebook/Apple (obecnie w trybie Development, limit userów, banner na ekranach logowania)
-- Skonfigurować Universal Links (iOS) / App Links (Android) pod domeną, jeśli/gdy powstanie appka mobilna (patrz sekcja niżej) — potrzebne pliki weryfikacyjne hostowane na `healthbuddy.pl`
+- **Wyłączyć swoją opłatę 29 zł** (konto poddamian@gmail.com ma aktywne Premium):
+  1. **dashboard.stripe.com** (tryb live, nie „Test mode”) → **Customers** → znajdź `poddamian@gmail.com`.
+  2. W sekcji Subscriptions kliknij subskrypcję → **Cancel subscription** → **Immediately** (od razu Free) albo „End of period” (do końca opłaconego miesiąca).
+  3. Jeśli chcesz odzyskać 29 zł na kartę: **Payments** → kliknij tę płatność → **Refund**. Prowizja Stripe (ok. 1–2 zł) nie wraca. Pieniądze i tak trafiły na Twoje konto Stripe — płaciłeś sam sobie.
+- **Włączyć w Stripe „panel klienta”** — bez tego przycisk „Wróć na Free / Zarządzaj subskrypcją” na stronie z cenami nie zadziała. Stripe Dashboard (tryb **live**) → Settings → Billing → **Customer portal** → zaznacz „Customers can cancel subscriptions” (najlepiej „at end of billing period”) → **Save**.
+- **Sprawdzić, czy anulowanie działa** — po włączeniu panelu klienta: zaloguj się na konto z Premium (np. kup je jeszcze raz i zaraz zwróć pieniądze), wejdź w **Cennik** → „Wróć na Free (anuluj subskrypcję)”. Powinna otworzyć się strona Stripe. Jeśli zamiast tego pojawi się czerwony komunikat błędu — daj znać, jaki.
+- **Sprawdzić „budzik” Supabase** — Vercel → projekt → Settings → **Cron Jobs**: powinno być zadanie `/api/health` codziennie o 6:00. Jeśli baza jest teraz uśpiona, raz obudź ją ręcznie: Supabase Dashboard → **Restore**.
+- **Powiadomienia o płatnościach** — w Stripe: Settings → Notifications (Communication preferences) → włącz maile o nieudanych webhookach. Webhook to wiadomość, którą Stripe wysyła do appki po płatności — jeśli nie dojdzie, użytkownik zapłaci, a nie dostanie Premium.
 
-## Appka mobilna (Android / może iOS) — decyzja architektoniczna do podjęcia
+## 2. Przed wpuszczeniem prawdziwych ludzi
 
-Plan: użytkownicy mają docelowo korzystać z appki, nie przeglądarki. Domena i backend (obecny Next.js/API) zostają potrzebne niezależnie (patrz uzasadnienie w historii rozmowy) — do ustalenia jest **jak** zbudować appkę:
-- natywna appka (React Native / Flutter) korzystająca z tych samych `/api/*` co teraz, czy
-- WebView-wrapper (Capacitor) opakowujący obecny Next.js
+**Żeby widzieć błędy**
+- **Sentry** — zbiera błędy, które wyskakują użytkownikom, żebyś o nich wiedział, zanim ktoś napisze. Konto jest założone (org `damian-0v`), ale plugin Sentry dla Claude Code **nie jest jeszcze zainstalowany**. W osobnym oknie PowerShell wpisz `npx @sentry/agent-plugin install damian-0v#555cdcf03e`, zaznacz **spacją** „Claude Code”, Enter, zaloguj się w przeglądarce. Potem zrestartuj Claude Code i poproś mnie o podłączenie Sentry do appki.
 
-Do ustalenia przed startem prac nad appką. Wersja przeglądarkowa może zostać jako landing/marketing + polityka prywatności (wymagana przez App Store/Google Play) — nie trzeba jej "ukrywać", naturalnie przestanie być głównym kanałem gdy powstanie appka.
+**Porządki w danych**
+- **Kopia zapasowa bazy** — Supabase Dashboard → Database → Backups → zrób ręczną kopię, zanim pojawią się prawdziwe dane.
+- **Usunąć konta testowe** (Kasia, Ania, Antek, Marek — te bez wpisanej płci), żeby nie były dobierane w pary z prawdziwymi ludźmi.
 
-## Przed prawdziwym startem (realni użytkownicy, nie testowi)
+**Prawo (RODO)**
+- **Polityka prywatności i regulamin** — szkic tego, co muszą zawierać, jest w `docs/legal-podstawa.md`. Trzeba z tego zrobić prawdziwe dokumenty: najtaniej przez generator (np. iubenda), pewniej przez prawnika. Appka zbiera dane o nawykach/zdrowiu, więc to ważne.
+- **Checkbox zgody na dane zdrowotne** przy rejestracji (w onboardingu) — przepisy wymagają osobnej, wyraźnej zgody. To mogę dodać ja, gdy będzie gotowy tekst zgody.
 
-**Widoczność błędów**
-- Error tracking (Sentry — free plan wystarczy) do Next.js, żeby wyjątki nie ginęły w konsoli użytkownika
-- Alert na nieudane webhooki Stripe (Dashboard → Developers → Webhooks → tab "Failed")
-- Uptime monitor (UptimeRobot/Better Uptime) podpięty pod istniejący `/api/health`
+**Start na małą skalę**
+- Najpierw 10–20 znajomych, którzy używają appki naprawdę (swój mail, prawdziwe dane). Łatwiej wyłapać błędy na kilku osobach niż na kilkuset. Dopiero potem publiczny post.
 
-**Kontrolowany start**
-- Zacząć od zamkniętej grupy (znajomi, 10-20 osób) z realną ścieżką (własny mail, prawdziwe dane) zanim pójdzie publiczny post — łatwiej złapać błędy na 5 osobach niż na 500
+## 3. Później — appka na telefon
 
-**Dane**
-- Pierwszy ręczny backup Supabase (Dashboard → Database → Backups) zanim pojawią się prawdziwe dane
-- Usunąć stare konta testowe (Kasia/Ania/Antek/Marek, `gender = NULL`) przed realnym startem, żeby nie mieszały się w matchingu
+Do zdecydowania, jak ją zrobić:
+- **Opakowanie obecnej strony w appkę** (Capacitor) — szybciej i taniej, appka wygląda jak strona.
+- **Osobna, prawdziwa appka** (React Native / Flutter) — więcej pracy, ale lepiej działa i wygląda na telefonie.
 
-**Zgodność prawna (RODO/UODO)**
-- Szkielet gotowy w `docs/legal-podstawa.md` (czego wymaga polityka prywatności i regulamin dla tej appki — dane o nawykach jako potencjalnie wrażliwe, matching jako profilowanie, lista procesorów Clerk/Supabase/Stripe/Vercel) — do przepisania na właściwe dokumenty (iubenda / prawnik)
-- Brak osobnej zgody (checkbox) na przetwarzanie danych zdrowotnych przy rejestracji — do dodania w onboardingu
-- Research domen/konkurencji w `docs/research-domeny-konkurencja.md`
+W obu przypadkach strona `healthbuddy.pl` zostaje (jako strona główna + polityka prywatności, której wymagają sklepy Google/Apple). Przy appce trzeba będzie też dodać na stronie małe pliki, dzięki którym linki `healthbuddy.pl/...` otwierają się od razu w appce.
 
-**Obciążenie** — nie wymaga akcji teraz, wrócić dopiero przy zbliżaniu się do limitów Free (Supabase Dashboard pokazuje % wykorzystania)
+## Na razie nie trzeba nic robić
+
+- **Limity darmowych planów** — wrócić do tematu, gdy Supabase Dashboard pokaże, że zbliżasz się do limitu.
+- Research konkurencji jest w `docs/research-domeny-konkurencja.md` — do wglądu, gdy będzie potrzebny.
