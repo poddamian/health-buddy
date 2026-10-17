@@ -13,9 +13,6 @@
 
 ## 2. Przed wpuszczeniem prawdziwych ludzi
 
-**Żeby widzieć błędy**
-- **Sentry — podać „DSN”** — Sentry jest już podłączone w kodzie, brakuje tylko adresu, pod który appka ma wysyłać błędy. Sentry → Settings → Projects → (projekt Next.js) → **Client Keys (DSN)** → skopiuj adres zaczynający się od `https://` i wklej go Claude'owi. Bez tego Sentry nic nie zbiera.
-
 **Porządki w danych**
 - **Kopia zapasowa bazy** — Supabase Dashboard → Database → Backups → zrób ręczną kopię, zanim pojawią się prawdziwe dane.
 - **Usunąć konta testowe** (Kasia, Ania, Antek, Marek — te bez wpisanej płci), żeby nie były dobierane w pary z prawdziwymi ludźmi.
@@ -36,6 +33,8 @@ Do zdecydowania, jak ją zrobić:
 W obu przypadkach strona `healthbuddy.pl` zostaje (jako strona główna + polityka prywatności, której wymagają sklepy Google/Apple). Przy appce trzeba będzie też dodać na stronie małe pliki, dzięki którym linki `healthbuddy.pl/...` otwierają się od razu w appce.
 
 ## Na razie nie trzeba nic robić
+
+- **Sentry działa** (błędy trafiają na sentry.io, projekt Health Buddy). Opcjonalnie później: „czytelne ślady błędów” (source maps) — wymaga tokenu z Sentry (Settings → Auth Tokens) dodanego w Vercel jako `SENTRY_AUTH_TOKEN` + nazwy projektu jako `SENTRY_PROJECT`. Bez tego Sentry też działa, tylko opisy błędów są mniej czytelne.
 
 - **Limity darmowych planów** — wrócić do tematu, gdy Supabase Dashboard pokaże, że zbliżasz się do limitu.
 - Research konkurencji jest w `docs/research-domeny-konkurencja.md` — do wglądu, gdy będzie potrzebny.
