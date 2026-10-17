@@ -14,7 +14,7 @@
 ## 2. Przed wpuszczeniem prawdziwych ludzi
 
 **Żeby widzieć błędy**
-- **Sentry** — zbiera błędy, które wyskakują użytkownikom, żebyś o nich wiedział, zanim ktoś napisze. Konto jest założone (org `damian-0v`), ale plugin Sentry dla Claude Code **nie jest jeszcze zainstalowany**. W osobnym oknie PowerShell wpisz `npx @sentry/agent-plugin install damian-0v#555cdcf03e`, zaznacz **spacją** „Claude Code”, Enter, zaloguj się w przeglądarce. Potem zrestartuj Claude Code i poproś mnie o podłączenie Sentry do appki.
+- **Sentry — podać „DSN”** — Sentry jest już podłączone w kodzie, brakuje tylko adresu, pod który appka ma wysyłać błędy. Sentry → Settings → Projects → (projekt Next.js) → **Client Keys (DSN)** → skopiuj adres zaczynający się od `https://` i wklej go Claude'owi. Bez tego Sentry nic nie zbiera.
 
 **Porządki w danych**
 - **Kopia zapasowa bazy** — Supabase Dashboard → Database → Backups → zrób ręczną kopię, zanim pojawią się prawdziwe dane.
